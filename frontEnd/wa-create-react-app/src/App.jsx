@@ -31,11 +31,11 @@ function App() {
         <button onClick={hochladenZuBackEnd}>Hochladen zu BackEnd</button>
       </article>
 
-      {
+{/*       {
         images.map((img, key) => {
           return <img style={{ width: '25%' }} key={key} src={img} alt='hochgeladenes Bild' > </img>
         })
-      }
+      } */}
 
     </section>
   );
