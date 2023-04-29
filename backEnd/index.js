@@ -10,6 +10,8 @@ import morgan from 'morgan'
 import { getDb } from './util/db.js'
 import { ObjectId } from 'mongodb'
 import Joi from 'joi'
+import { request } from 'http'
+import { buffer } from 'stream/consumers'
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -20,36 +22,51 @@ cloudinary.config({
 const BACKEND_PORT = process.env.BACKEND_PORT
 const app = express()
 
-const schema = Joi.object({
-    name: Joi.string().min(3).max(30).required(),
-    testBildJoiValidation: Joi.object({
-        mimetype: Joi.string().valid('image/png', 'image/jpeg', 'image/jpg'),
-        size: Joi.number().max(1 * 1024 * 1024)
-    }).required()
-
-})
 
 
-const upload = multer( {
-    storage: multer.memoryStorage(),
+    const upload = multer({
 
-    // validieren mit Joi -> die Datei die hochgeladen wird wird geprüft
-    // ob es ein Bild ist     und ob es die richtige Größe hat
-    fileFilter: (req, file, cb) => {
-        const schema = Joi.object({
-            size: Joi.number().max(1 * 1024 * 1024).required(),
-            mimetype: Joi.string().valid('image/png', 'image/jpeg', 'image/jpg').required()
-        })
-        const { error } = schema.validate({ size: file.size, mimetype: file.mimetype })
+        limits: {
+            fileSize: 1 * 1024 * 1024
+        },
 
-        if (error) {
-            cb(new Error( `Fehler beim Hochladen: ${error.message}`))
-        } 
-        else {
-            cb(null, true)
-        }
-    }
-})
+        // validieren mit Joi -> die Datei die hochgeladen wird wird geprüft
+        // ob es ein Bild ist     und ob es die richtige Größe hat
+        fileFilter: (req, file, cb) => {
+
+            console.log(req.headers['content-length'])
+            console.log(file)
+
+            // ! schema definieren
+            const schema = Joi.object({
+
+                bildGroesse: Joi.number().max(1 * 1024 * 1024).required(),
+                mimetype: Joi.string().valid('image/png', 'image/jpeg', 'image/jpg').required()
+            })
+
+            // ! schema validieren    definition    mit    den   datenOrten 
+            const { error, value } = schema.validate({
+                bildGroesse: req.headers['content-length'],
+                mimetype: file.mimetype
+            },
+                // ! abortEarly: false -> alle Fehler werden angezeigt
+                { abortEarly: false })
+
+            if (error) {
+                const errorMessages = error.details.map(detail => detail.message)
+                cb(new Error(`Fehler beim Hochladen: ${errorMessages.join(', ')}`), 422)
+                // cb(new Error(`Fehler beim Hochladen: ${error.message}`))
+                //   cb(new Error(`Fehler beim Hochladen: ${error.details}`), 422)    
+                // ! , 422 -> fügt einen Status Error code hinzu     error.status = 422
+            }
+            else {
+                cb(null, true)
+            }
+        },
+        storage: multer.memoryStorage()
+    })
+
+
 
 
 app.use(morgan('dev'))
@@ -105,7 +122,7 @@ app.post('/directupload', upload.single('file'), async (req, res) => {
             const { error, value } = schema.validate({ name: req.body.name, imgUrl: result.secure_url })
 
             // ! wenn ein Fehler auftritt dann wird ein Fehler geworfen
-            if (error ) {
+            if (error) {
                 throw new Error(`Fehler beim Hochladen: ${error.message}`)
             }
 
